@@ -1,0 +1,47 @@
+#!/bin/bash -eu
+
+source $OPENSHIFT_CARTRIDGE_SDK_BASH
+
+
+# Create additional directories required
+
+curl -o ${OPENSHIFT_NEWRELIC_DIR}/newrelic-java.zip http://download.newrelic.com/newrelic/java-agent/newrelic-agent/current/newrelic-java.zip
+
+unzip "${OPENSHIFT_NEWRELIC_DIR}/newrelic-java.zip" -d "${OPENSHIFT_NEWRELIC_DIR}"
+
+rm "${OPENSHIFT_NEWRELIC_DIR}/newrelic-java.zip"
+
+sed -i "s/'<%= license_key %>'/${OPENSHIFT_NEWRELIC_LICENSE_KEY}/g" "${OPENSHIFT_NEWRELIC_DIR}newrelic/newrelic.yml"
+
+sed -i "s/My Application/${OPENSHIFT_APP_NAME}/g" "${OPENSHIFT_NEWRELIC_DIR}newrelic/newrelic.yml"
+
+mkdir -p ${OPENSHIFT_NEWRELIC_DIR}/logs
+
+touch ${OPENSHIFT_HOMEDIR}.env/user_vars/JAVA_OPTS_EXT
+
+cp ${OPENSHIFT_HOMEDIR}.env/user_vars/JAVA_OPTS_EXT ${OPENSHIFT_NEWRELIC_DIR}JAVA_OPTS_EXT.bak
+
+echo " -javaagent:${OPENSHIFT_NEWRELIC_DIR}newrelic/newrelic.jar" >> ${OPENSHIFT_HOMEDIR}.env/user_vars/JAVA_OPTS_EXT
+
+client_message "The New Relic Java agent has been installed. Please restart your application with the command    rhc app restart ${OPENSHIFT_APP_NAME}"
+
+
+# Detect primary cartrigde type
+
+PRIMARY_CART=$(ruby_sdk "primary_cartridge_manifest['Name']")
+client_message "The primary cartridge name is: ${PRIMARY_CART}"
+
+case "$PRIMARY_CART" in
+  jboss*)
+    client_message "Valid primary cartridge detected."
+    CONFIG_SUFFIX=$PRIMARY_CART
+    ;;
+
+  *)
+    # Invalid cartridge type
+    client_error "Invalid primary cartridge: ${PRIMARY_CART}"
+    client_error "Only JBoss cartridges are allowed: jbossas, jbosseap, jbossews"
+    exit 109
+    ;;
+esac
+
